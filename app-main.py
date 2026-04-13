@@ -11,7 +11,59 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 
 # 定义变量列表（可任意增减，代码会自适应）
-vars = ['T', 'M', 'N', 'Tumor location', 'Differentiation', 'Perineural invasion', 'CA199 ', 'CA724', 'TP before the first treatment','HBcAb IGM']
+vars = ['Age', 'N', 'M', 'Stage', 'Tumor_size', 'Perineural_invasion', 'CEA', 'CA199', 'ALB']
+
+# 🌟 二分类转换规则与输入提示
+binary_rules = {
+    'Age': {
+        'hint': '≤65 → 0；＞65 → 1',
+        'type': 'numeric',
+        'threshold': 65,
+        'convert': lambda x: 0 if float(x) <= 65 else 1
+    },
+    'N': {
+        'hint': '0-1 → 0；2-3 → 1',
+        'type': 'numeric',
+        'convert': lambda x: 0 if float(x) <= 1 else 1
+    },
+    'M': {
+        'hint': 'No → 0；Yes → 1',
+        'type': 'categorical',
+        'options': ['No', 'Yes'],
+        'convert': lambda x: 0 if x == 'No' else 1
+    },
+    'Stage': {
+        'hint': '0-2 → 0；3-4 → 1',
+        'type': 'numeric',
+        'convert': lambda x: 0 if float(x) <= 2 else 1
+    },
+    'Tumor_size': {
+        'hint': '≤3.9 cm → 0；＞3.9 cm → 1',
+        'type': 'numeric',
+        'convert': lambda x: 0 if float(x) <= 3.9 else 1
+    },
+    'Perineural_invasion': {
+        'hint': 'No → 0；Yes → 1',
+        'type': 'categorical',
+        'options': ['No', 'Yes'],
+        'convert': lambda x: 0 if x == 'No' else 1
+    },
+    'CEA': {
+        'hint': '≤5.00 ng/ml → 0；＞5.00 ng/ml → 1',
+        'type': 'numeric',
+        'convert': lambda x: 0 if float(x) <= 5.0 else 1
+    },
+    'CA199': {
+        'hint': '≤37.00 U/ml → 0；＞37.00 U/ml → 1',
+        'type': 'numeric',
+        'convert': lambda x: 0 if float(x) <= 37.0 else 1
+    },
+    'ALB': {
+        'hint': '≤40.0 g/L → 0；＞40.0 g/L → 1',
+        'type': 'numeric',
+        'convert': lambda x: 0 if float(x) <= 40.0 else 1
+    }
+}
 
 # 初始化 session_state 中的 data
 # 动态生成DataFrame列名：变量列表 + 预测相关列
@@ -34,17 +86,29 @@ except Exception as e:
 # 侧边栏输入区
 st.sidebar.header('Parameters input')
 
-# 🌟 核心修改1：自适应生成输入框
-# 存储所有输入值的字典
+# 🌟 根据变量类型生成输入框，并显示二分类提示
 input_values = {}
 for var in vars:
-    # 为每个变量生成独立的数字输入框
-    input_values[var] = st.sidebar.number_input(
-        label=var,
-        min_value=0.0,
-        value=0.0,
-        key=f"input_{var}"  # 唯一key避免冲突
-    )
+    rule = binary_rules.get(var, {})
+    hint = rule.get('hint', '')
+    label_text = f"{var}  ({hint})" if hint else var
+
+    if rule.get('type') == 'categorical':
+        # 分类变量：下拉选择
+        options = rule.get('options', [])
+        input_values[var] = st.sidebar.selectbox(
+            label=label_text,
+            options=options,
+            key=f"input_{var}"
+        )
+    else:
+        # 数值变量：数字输入框
+        input_values[var] = st.sidebar.number_input(
+            label=label_text,
+            min_value=0.0,
+            value=0.0,
+            key=f"input_{var}"
+        )
 
 # 加载模型（确保模型路径正确）
 try:
@@ -55,9 +119,15 @@ except FileNotFoundError:
 
 # 提交按钮逻辑
 if st.sidebar.button("Submit"):
-    # 🌟 核心修改2：自适应构建输入数据框
-    # 将输入值转换为DataFrame，列顺序与vars完全一致
-    X = pd.DataFrame([list(input_values.values())], columns=vars)
+    # 🌟 将原始输入值转换为二分类值
+    binary_values = {}
+    for var in vars:
+        rule = binary_rules.get(var, {})
+        convert_fn = rule.get('convert', lambda x: x)
+        binary_values[var] = convert_fn(input_values[var])
+
+    # 构建输入数据框（使用二分类转换后的值）
+    X = pd.DataFrame([list(binary_values.values())], columns=vars)
 
     try:
         # 模型预测（概率）
@@ -76,8 +146,8 @@ if st.sidebar.button("Submit"):
 
 
         # 🌟 核心修改3：自适应拼接新数据
-        # 构造新数据行：输入值 + 预测概率 + Label（暂为空）
-        new_data_row = list(input_values.values()) + [binary_result, None]
+        # 存储二分类转换后的值到结果表中
+        new_data_row = list(binary_values.values()) + [binary_result, None]
         new_data = pd.DataFrame([new_data_row], columns=df_columns)
 
         # 更新session_state中的数据
@@ -101,8 +171,19 @@ if uploaded_file is not None:
         else:
             # 逐行预测
             for _, row in df.iterrows():
-                # 🌟 核心修改4：自适应提取上传文件中的变量
-                X = pd.DataFrame([row[vars].values], columns=vars)
+                # 🌟 对上传数据的每行做二分类转换
+                binary_row = {}
+                for var in vars:
+                    rule = binary_rules.get(var, {})
+                    convert_fn = rule.get('convert', lambda x: x)
+                    raw_val = row[var]
+                    # 分类变量直接传字符串，数值变量转float
+                    if rule.get('type') == 'categorical':
+                        binary_row[var] = convert_fn(str(raw_val).strip())
+                    else:
+                        binary_row[var] = convert_fn(float(raw_val))
+
+                X = pd.DataFrame([list(binary_row.values())], columns=vars)
 
                 # 预测
                 result_prob = mm.predict_proba(X)[0][1]
@@ -111,8 +192,9 @@ if uploaded_file is not None:
                 # 获取Label（如果有）
                 label = row['label'] if 'label' in df.columns else None
 
-                # 构造新行并更新数据
-                new_data_row = row[vars].tolist() + [result_prob_pos, label]
+                # 构造新行并更新数据（存储二分类转换后的值）
+                row_binary_result = 1 if result_prob_pos >= 0.74 else 0
+                new_data_row = list(binary_row.values()) + [row_binary_result, label]
                 new_data = pd.DataFrame([new_data_row], columns=df_columns)
                 st.session_state['data'] = pd.concat(
                     [st.session_state['data'], new_data],
@@ -132,7 +214,7 @@ st.write(
     unsafe_allow_html=True
 )
 st.markdown(
-    '<div style="font-size: 12px; text-align: right;">Powered by MyLab+ X i-Research Consulting Team</div>',
+    '<div style="font-size: 12px; text-align: right;">Powered by MyLab+ X i-Research Q Consulting Team</div>',
     unsafe_allow_html=True
 )
 
