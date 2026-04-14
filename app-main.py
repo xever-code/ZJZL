@@ -18,13 +18,17 @@ binary_rules = {
     'Age': {
         'hint': '≤65 → 0；＞65 → 1',
         'type': 'numeric',
+        'min_val': 1,
+        'max_val': 100,
+        'step': 1,
         'threshold': 65,
-        'convert': lambda x: 0 if float(x) <= 65 else 1
+        'convert': lambda x: 0 if int(x) <= 65 else 1
     },
     'N': {
         'hint': '0-1 → 0；2-3 → 1',
-        'type': 'numeric',
-        'convert': lambda x: 0 if float(x) <= 1 else 1
+        'type': 'categorical',
+        'options': [1, 2, 3],
+        'convert': lambda x: 0 if int(x) <= 1 else 1
     },
     'M': {
         'hint': 'No → 0；Yes → 1',
@@ -34,8 +38,9 @@ binary_rules = {
     },
     'Stage': {
         'hint': '0-2 → 0；3-4 → 1',
-        'type': 'numeric',
-        'convert': lambda x: 0 if float(x) <= 2 else 1
+        'type': 'categorical',
+        'options': [1, 2, 3, 4],
+        'convert': lambda x: 0 if int(x) <= 2 else 1
     },
     'Tumor_size': {
         'hint': '≤3.9 cm → 0；＞3.9 cm → 1',
@@ -105,8 +110,10 @@ for var in vars:
         # 数值变量：数字输入框
         input_values[var] = st.sidebar.number_input(
             label=label_text,
-            min_value=0.0,
-            value=0.0,
+            min_value=rule.get('min_val', 0.0),
+            max_value=rule.get('max_val', None),
+            value=rule.get('min_val', 0.0),
+            step=rule.get('step', 0.1),
             key=f"input_{var}"
         )
 
@@ -142,7 +149,7 @@ if st.sidebar.button("Submit"):
         binary_result = 1 if result_prob_pos >= 0.74 else 0
 
         # 显示预测结果
-        st.text(f"The probability of LightGBM is: {result_prob_pos}%")
+        st.markdown(f'<p style="font-size:28px; font-weight:bold; color:#1a3a6b;">5‑year poor prognosis risk : {result_prob_pos}%</p>', unsafe_allow_html=True)
 
 
         # 🌟 核心修改3：自适应拼接新数据
