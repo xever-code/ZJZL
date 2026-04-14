@@ -95,8 +95,7 @@ st.sidebar.header('Parameters input')
 input_values = {}
 for var in vars:
     rule = binary_rules.get(var, {})
-    hint = rule.get('hint', '')
-    label_text = f"{var}  ({hint})" if hint else var
+    label_text = var
 
     if rule.get('type') == 'categorical':
         # 分类变量：下拉选择
