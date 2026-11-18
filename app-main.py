@@ -27,7 +27,7 @@ binary_rules = {
     'N': {
         'hint': '0-1 → 0；2-3 → 1',
         'type': 'categorical',
-        'options': [1, 2, 3],
+        'options': [0, 1, 2, 3],
         'convert': lambda x: 0 if int(x) <= 1 else 1
     },
     'M': {
@@ -39,7 +39,7 @@ binary_rules = {
     'Stage': {
         'hint': '0-2 → 0；3-4 → 1',
         'type': 'categorical',
-        'options': [1, 2, 3, 4],
+        'options': [0, 1, 2, 3, 4],
         'convert': lambda x: 0 if int(x) <= 2 else 1
     },
     'Tumor_size': {
@@ -95,7 +95,8 @@ st.sidebar.header('Parameters input')
 input_values = {}
 for var in vars:
     rule = binary_rules.get(var, {})
-    label_text = var
+    hint = rule.get('hint', '')
+    label_text = f"{var}  ({hint})" if hint else var
 
     if rule.get('type') == 'categorical':
         # 分类变量：下拉选择
